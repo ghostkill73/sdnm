@@ -1,0 +1,133 @@
+#! /usr/bin/sh
+################################################################################
+#
+# Author : Abner Benedito <ghostkill73>
+# License: 0-BSD
+# Version: 1.0.0
+#
+################################################################################
+#
+# Zero-Clause BSD
+# =============
+#
+# Permission to use, copy, modify, and/or distribute this software for
+# any purpose with or without fee is hereby granted.
+#
+# THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
+# WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
+# OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
+# FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
+# DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+# OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+################################################################################
+
+### Configs ###
+
+set -ef
+LC_ALL=C
+LANG=C
+
+### Tests ###
+
+if [ `id -u` != 0 ]; then
+	echo "ERROR: Execute this script with root privileges."
+	exit 1
+fi
+
+### Script ###
+
+while true; do
+	clear
+	echo '-------------------------------'
+	echo '|    ▗▄▄▖▗▄▄▄ ▗▖  ▗▖▗▖  ▗▖    |'
+	echo '|   ▐▌   ▐▌  █▐▛▚▖▐▌▐▛▚▞▜▌    |'
+	echo '|    ▝▀▚▖▐▌  █▐▌ ▝▜▌▐▌  ▐▌    |'
+	echo '|   ▗▄▄▞▘▐▙▄▄▀▐▌  ▐▌▐▌  ▐▌    |'
+	echo '|Simple Debian Network Manager|'
+	echo '-------------------------------'
+	echo
+	echo `iwgetid`
+	echo
+	echo "[0] List Networks <need's set interface>"
+	echo '[1] Set Interface'
+	echo
+	echo -n 'sdnm > '
+	read _opt
+
+	tempfile=`mktemp`
+	case $_opt in
+		'0')
+			if [ x"$INTERFACE" = x ]; then
+				echo "interface not set. use '1' option."
+				echo -n 'press enter to continue...'
+				read enter
+				rm -f $tempfile &>/dev/null
+				continue
+			fi
+
+			echo "scanning networks in $INTERFACE interface..."
+			iwlist $INTERFACE scan > $tempfile
+
+			while read network; do
+				set -- $network
+				case $network in
+					*'Address:'*) shift; echo -n "$*" ;;
+					*'ESSID:'*)   echo " | $*"   ;;
+				esac
+			done < $tempfile
+			unset network
+
+			echo -n 'enter the network ESSID: '
+			read NETWORK_ESSID
+
+			echo -n 'enter the network PSK  : '
+			read NETWORK_PSK
+
+			echo "NAME = $NETWORK_ESSID"
+			echo "PSK  = $NETWORK_PSK"
+
+			echo "creating /etc/network/interfaces.d/${INTERFACE}.conf"
+			(
+			echo "allow-hotplug $INTERFACE"
+			echo "iface $INTERFACE inet dhcp"
+			echo "	wpa-ssid $NETWORK_ESSID"
+			echo "	wpa-psk  $NETWORK_PSK"
+			) > /etc/network/interfaces.d/"$INTERFACE".conf
+
+			echo "-> /etc/init.d/networking restart"
+			/etc/init.d/networking restart
+
+			echo "-> dhclient"
+			dhclient
+
+			echo "-> /etc/init.d/networking status"
+			/etc/init.d/networking status
+
+			echo "configured $INTERFACE interface."
+			echo -n 'press enter to continue...'
+			read enter
+			;;
+		'1')
+			echo "printing network interfaces..."
+			ip addr > $tempfile
+
+			while read interface; do
+				set -- $interface
+				case $interface in
+					[0-9]*) echo "$*" ;;
+				esac
+			done < $tempfile
+			unset interface
+
+			echo -n 'enter the interface name: '
+			read INTERFACE
+
+			echo "INTERFACE = $INTERFACE"
+			echo -n 'press enter to continue...'
+			read enter
+			;;
+	esac
+	rm -f $tempfile &>/dev/null
+done
